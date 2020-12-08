@@ -1,0 +1,113 @@
+#install required packages
+install.packages('openxlsx')
+install.packages('reshape2')
+install.packages("e1071")
+install.packages("minpack.lm")
+install.packages("data.table")
+install.packages("mltools")
+install.packages("vtreat")
+install.packages("magrittr") 
+install.packages("dplyr")
+install.packages("janeaustenr")
+install.packages("stringr")
+install.packages("tidyverse")
+
+#Set Working Directory
+setwd('C:/Users/umalik/Desktop/Forecasting')
+getwd()
+library("openxlsx")
+data1 <- read.xlsx('Rweekly.xlsx',sheet = 1)
+
+
+#summary(data)
+head(data1)
+colnames(data1)
+
+#One hot encoding
+# Using model.matrix
+new_df1 <- data1
+new_df1$Device<- factor(new_df1$Device, exclude = NULL)
+new_df1$Adgroup<- factor(new_df1$Adgroup, exclude = NULL)
+new_df1 <- model.matrix(~.-1, data = new_df1[, c("Device","Adgroup")],
+                        contrasts.arg = list(
+                          Device = contrasts(new_df1$Device, contrasts = FALSE),
+                          Adgroup = contrasts(new_df1$Adgroup, contrasts = FALSE)
+                        ))
+head(new_df1)
+
+nrow(new_df1)
+head(data1)
+
+#drop columns in data before merging
+library(dplyr)
+data2<- select(data1,-Adgroup,-Device)
+head(data2)
+nrow(data2)
+write.table(data2,file="dataWeek.csv",row.names=F,sep=",")
+
+#merge files
+merge<-merge(new_df1,data2)
+write.table(new_df1,file="df1week.csv",row.names=F,sep=",")
+
+merged<- read.xlsx('MergedWeekly.xlsx',sheet = 1)
+merged$SignUpForm <- merged$SignUpFormENG + merged$SignUpFormPV
+head(merged)
+names(merged)
+
+#format data
+merged$Date = as.Date(merged$Week,origin = "1899-12-30")
+
+#filter April
+mergedf <- filter(merged,Date < "2020-04-01" | Date > "2020-04-30")
+mergedf$SignUpForm <- mergedf$SignUpFormENG + mergedf$SignUpFormPV
+write.table(mergedf,file="mergedf.csv",row.names=F,sep=",")
+
+
+# correlation matrix
+names(merged)
+drops <- c("Date","date","Weekday")
+correlation <- cor(merged[,!(names(merged) %in% drops)])
+write.table(correlation,file="CorrelationMetrix.csv",row.names=F,sep=",")
+
+#linear regression
+drops <- c("Date","date","Weekday")
+data <- merged[,!(names(merged) %in% drops)]
+data<-merged
+
+model = lm(formula = data$RegisterorActivateCardPV ~ .,data)
+summary(model)
+
+
+
+#transformations
+adstockTransform1 <- function(x,alpha,lambda){
+  stats::filter( 1/(1+exp(-alpha*x)), lambda, method = "recursive")
+}
+
+adstockTransform2 <- function(x,lambda){
+  stats::filter( x, lambda, method = "recursive")
+}
+
+adstockTransform3 <- function(x,lambda){
+  stats::filter( exp(x), lambda, method = "recursive")
+} 
+
+adstockTransform4 <- function(x,lambda){
+  stats::filter( log(x), lambda, method = "recursive")
+} 
+
+adstockTransform5 <- function(x,a,lambda){
+  stats::filter( poly(x,a), lambda, method = "recursive")
+} 
+
+adstockTransform6 <- function(x,a,lambda){
+  stats::filter( x^a, lambda, method = "recursive")
+} 
+
+
+#model with significant variables
+model2 = lm(formula = data$RegisterorActivateCardPV ~           
+            data$Clicks+adstockTransform2(data$Cost,.40)+data$Impr+data$AdgroupSavings+data$DeviceDesktop+data$DeviceDesktop+data$Adgroup_Fycompa+
+              data$AdgroupCopay, data)
+summary(model2)
+
