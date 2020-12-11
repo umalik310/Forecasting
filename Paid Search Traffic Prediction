@@ -1,0 +1,60 @@
+#Set Working Directory
+setwd('C:/Users/umalik/Desktop/Forecasting')
+getwd()
+library("openxlsx")
+data <- read.xlsx('ForecastingSessionsData.xlsx',sheet = 3)
+
+
+#summary(data)
+head(data)
+colnames(data)
+nrow(data)
+
+#Change data and build new column called click
+data$Date <- as.Date(data$Date,origin = "1899-12-30")
+data$Week <- as.Date(data$Week,origin = "1899-12-30")
+data$Clicks <- data$DesktopClicks + data$MobileClicks + data$TabletClicks
+
+drops <- c("Week","Date","Month","Week.of.Date")
+data <- data[,!(names(data) %in% drops)]
+
+
+#transformations
+adstockTransform1 <- function(x,alpha,lambda){
+  stats::filter( 1/(1+exp(-alpha*x)), lambda, method = "recursive")
+}
+
+adstockTransform2 <- function(x,lambda){
+  stats::filter( x, lambda, method = "recursive")
+}
+
+adstockTransform3 <- function(x,lambda){
+  stats::filter( exp(x), lambda, method = "recursive")
+} 
+
+adstockTransform4 <- function(x,lambda){
+  stats::filter( log(x), lambda, method = "recursive")
+} 
+
+adstockTransform5 <- function(x,a,lambda){
+  stats::filter( poly(x,a), lambda, method = "recursive")
+} 
+
+adstockTransform6 <- function(x,a,lambda){
+  stats::filter( x^a, lambda, method = "recursive")
+} 
+
+#multivariateRegressio Model, Month dummy variable created in excel. For e.g. Date falling in Month of Apr given a dummy code of 1
+model = lm(formula = data$Sessions ~ DesktopClicks + MobileClicks + adstockTransform5(Cost,1,0.2) + Aug + Sep + Oct + Nov 
+           ,data)
+summary(model)
+
+#Set Working Directory
+setwd('C:/Users/umalik/Desktop/Forecasting')
+getwd()
+library("openxlsx")
+data2 <- read.xlsx('PredictSessions.xlsx',sheet = 1)
+SessionsPredict <- predict(model ,data2)
+write.table(SessionsPredict,file="PSessions.csv",row.names=F,sep=",")
+
+
